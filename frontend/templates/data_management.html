@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Data Management{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='calendar.css') }}">
+
 <div class="page-header">
     <div>
         <h1><i data-lucide="database"></i> Data Management</h1>
@@ -51,17 +54,17 @@
             </div>
             <div class="form-field">
                 <label for="from_date"><i data-lucide="calendar"></i> From Date</label>
-                <input type="date" id="from_date" name="from_date" required>
+                <input type="text" id="from_date" name="from_date" class="smart-date" placeholder="DD MM YYYY" required readonly>
             </div>
             <div class="form-field">
                 <label for="to_date"><i data-lucide="calendar"></i> To Date</label>
-                <input type="date" id="to_date" name="to_date" required>
+                <input type="text" id="to_date" name="to_date" class="smart-date" placeholder="DD MM YYYY" required readonly>
             </div>
         </div>
 
-        <p class="data-hint">
+        <p class="data-hint" id="rangeHint">
             <i data-lucide="info"></i>
-            All actions affect rows where <code>date BETWEEN From AND To</code> (inclusive).
+            Loading available dates...
         </p>
 
         <div class="form-actions">
@@ -102,7 +105,58 @@
 </div>
 {% endif %}
 
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='smart-date.js') }}"></script>
 <script>
+// Map of table value -> screener type for the API
+var TABLE_TO_SCREENER = {
+    "all": "all",
+    "stock_prices": "stock",
+    "sector_prices": "sector",
+    "index_prices": "index",
+};
+
+function refreshCalendarFor(tableValue) {
+    var screener = TABLE_TO_SCREENER[tableValue] || "all";
+    reloadSmartDates(screener);
+    updateRangeHint(screener);
+}
+
+function updateRangeHint(screener) {
+    var hint = document.getElementById("rangeHint");
+    if (!hint) return;
+    fetch("/api/available-dates/" + screener)
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.range && data.range.min) {
+                var minD = formatDateDisplay(data.range.min);
+                var maxD = formatDateDisplay(data.range.max);
+                hint.classList.remove("warn");
+                hint.innerHTML = '<i data-lucide="database"></i> Data available: <strong>' +
+                    minD + '</strong> to <strong>' + maxD +
+                    '</strong> (' + data.range.days + ' day' +
+                    (data.range.days !== 1 ? 's' : '') + ')';
+            } else {
+                hint.classList.add("warn");
+                hint.innerHTML = '<i data-lucide="alert-triangle"></i> No data uploaded for this table yet.';
+            }
+            if (window.lucide) lucide.createIcons();
+        });
+}
+
+function formatDateDisplay(iso) {
+    if (!iso) return "";
+    var p = iso.split("-");
+    return p[2] + " " + p[1] + " " + p[0];
+}
+
+// Init on page load
+(function () {
+    var sel = document.getElementById("table");
+    refreshCalendarFor(sel.value);
+    sel.addEventListener("change", function () { refreshCalendarFor(sel.value); });
+})();
+
 function confirmDelete() {
     var table = document.getElementById("table").value;
     var from = document.getElementById("from_date").value;
