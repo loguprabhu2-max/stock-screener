@@ -163,6 +163,39 @@ def api_available_dates(screener):
         "sector": "sector_prices",
         "index": "index_prices",
     }
+
+    # Special case: union of all 3 price tables (used by Data Management)
+    if screener == "all":
+        all_dates = set()
+        min_dates = []
+        max_dates = []
+        total = 0
+        for t in ("stock_prices", "sector_prices", "index_prices"):
+            ds = get_available_dates(t)
+            all_dates.update(ds)
+            r = get_date_range(t)
+            if r["min"]:
+                min_dates.append(r["min"])
+                max_dates.append(r["max"])
+            total += r["days"]
+        sorted_dates = sorted(all_dates)
+        if sorted_dates:
+            return jsonify({
+                "dates": sorted_dates,
+                "range": {
+                    "min": sorted_dates[0],
+                    "max": sorted_dates[-1],
+                    "days": len(sorted_dates),
+                    "min_display": "",
+                    "max_display": "",
+                },
+            })
+        return jsonify({
+            "dates": [],
+            "range": {"min": None, "max": None, "days": 0,
+                      "min_display": "", "max_display": ""},
+        })
+
     if screener not in table_map:
         return jsonify({"error": "unknown screener"}), 400
     table = table_map[screener]
