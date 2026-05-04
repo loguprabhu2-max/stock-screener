@@ -1,0 +1,11 @@
+stock_symbol,stock_name,sector,indexes
+RELIANCE,Reliance Industries,Energy,"Nifty 50, Nifty 100, Nifty 500"
+HDFCBANK,HDFC Bank,Banking,"Nifty 50, Nifty 100, Nifty 500, Bank Nifty"
+INFY,Infosys,IT,"Nifty 50, Nifty 100, Nifty 500, Nifty IT"
+TCS,Tata Consultancy Services,IT,"Nifty 50, Nifty 100, Nifty 500, Nifty IT"
+TATAMOTORS,Tata Motors,Auto,"Nifty 100, Nifty 500, Nifty Auto"
+ICICIBANK,ICICI Bank,Banking,"Nifty 50, Nifty 100, Nifty 500, Bank Nifty"
+SBIN,State Bank of India,Banking,"Nifty 50, Nifty 100, Nifty 500, Bank Nifty"
+WIPRO,Wipro,IT,"Nifty 100, Nifty 500, Nifty IT"
+MARUTI,Maruti Suzuki,Auto,"Nifty 50, Nifty 100, Nifty 500, Nifty Auto"
+ONGC,Oil and Natural Gas Corporation,Energy,"Nifty 100, Nifty 500"

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Sector Screener{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='calendar.css') }}">
+
+<div class="page-header">
+    <div>
+        <h1><i data-lucide="layers"></i> Sector Screener</h1>
+        <p class="subtitle">Rank sectors by % return over a date range.</p>
+    </div>
+</div>
+
+<div class="screener-form-card">
+    <form method="POST" action="{{ url_for('sector_screener') }}">
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="from_date"><i data-lucide="calendar"></i> From Date</label>
+                <input type="text" id="from_date" name="from_date" class="smart-date" placeholder="DD MM YYYY" value="{{ form_data.from_str }}" required readonly>
+            </div>
+            <div class="form-field">
+                <label for="to_date"><i data-lucide="calendar"></i> To Date</label>
+                <input type="text" id="to_date" name="to_date" class="smart-date" placeholder="DD MM YYYY" value="{{ form_data.to_str }}" required readonly>
+            </div>
+            <div class="form-field">
+                <label for="threshold"><i data-lucide="percent"></i> % Return ≥</label>
+                <input type="number" id="threshold" name="threshold" step="0.01"
+                       placeholder="e.g. 5" value="{{ form_data.threshold_str }}" required>
+            </div>
+        </div>
+
+        {% if date_range.min %}
+        <p class="data-hint">
+            <i data-lucide="database"></i>
+            Data available: <strong>{{ date_range.min_display }}</strong> to <strong>{{ date_range.max_display }}</strong>
+            ({{ date_range.days }} trading day{{ 's' if date_range.days != 1 else '' }})
+        </p>
+        {% else %}
+        <p class="data-hint warn">
+            <i data-lucide="alert-triangle"></i>
+            No sector price data uploaded yet.
+        </p>
+        {% endif %}
+
+        <div class="form-actions">
+            <button type="submit" class="btn-primary"><i data-lucide="search"></i> Show Result</button>
+            {% if results is not none and results|length > 0 %}
+                <button type="submit" formaction="{{ url_for('sector_screener_download') }}" class="btn-secondary">
+                    <i data-lucide="download"></i> Download CSV
+                </button>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+{% if form_errors %}
+    <div class="result-box result-error">
+        <h3><i data-lucide="alert-circle"></i> Please fix the following</h3>
+        <ul class="error-list-ul">
+            {% for err in form_errors %}<li>{{ err }}</li>{% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+{% if results is not none and not form_errors %}
+    <div class="results-summary">
+        <i data-lucide="check-circle"></i>
+        <strong>{{ info.matched }}</strong> sectors matched
+        (out of {{ info.total }}{% if info.excluded_no_data > 0 %};
+        {{ info.excluded_no_data }} excluded{% endif %}).
+    </div>
+
+    {% if results|length > 0 %}
+        <div class="results-table-wrap">
+            <table class="results-table sortable">
+                <thead>
+                    <tr>
+                        <th>Sector</th>
+                        <th title="Most recent close in database">Latest Price</th>
+                        <th class="num">% Return</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in results %}
+                    <tr>
+                        <td><strong>{{ r.sector_name }}</strong></td>
+                        <td class="num">
+                            {{ r.latest_price }}
+                            <span class="latest-date">{{ r.latest_date }}</span>
+                        </td>
+                        <td class="num {% if r.return_pct >= 0 %}positive{% else %}negative{% endif %}">
+                            {{ r.return_pct }}%
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <i data-lucide="search-x"></i>
+            <p>No sectors matched the criteria.</p>
+        </div>
+    {% endif %}
+{% endif %}
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="{{ url_for('static', filename='sortable.js') }}"></script>
+<script src="{{ url_for('static', filename='smart-date.js') }}"></script>
+<script>initSmartDates("sector");</script>
+{% endblock %}

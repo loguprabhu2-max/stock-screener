@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Login - Stock Screener{% endblock %}
+{% block body_class %}no-chrome{% endblock %}
+{% block content_no_sidebar %}
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="login-brand">
+            <div class="brand-mark large"><i data-lucide="line-chart"></i></div>
+            <h1>Stock Screener</h1>
+            <p class="subtitle">Sign in to continue</p>
+        </div>
+
+        <form method="POST" action="{{ url_for('login') }}">
+            <label for="username">Username</label>
+            <div class="input-with-icon">
+                <i data-lucide="user"></i>
+                <input type="text" id="username" name="username" required autofocus>
+            </div>
+
+            <label for="password">Password</label>
+            <div class="input-with-icon">
+                <i data-lucide="lock"></i>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <button type="submit" class="btn-primary btn-full">
+                <i data-lucide="log-in"></i> Sign In
+            </button>
+        </form>
+
+        <p class="footer-note">
+            <i data-lucide="info"></i>
+            No account? Contact your administrator.
+        </p>
+    </div>
+</div>
+{% endblock %}

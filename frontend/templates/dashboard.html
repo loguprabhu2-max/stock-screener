@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Stock Screener{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Welcome back, {{ current_user.username }}</h1>
+        <p class="subtitle">Pick a tool from the sidebar to get started.</p>
+    </div>
+</div>
+
+<div class="card-grid">
+    <a class="menu-card" href="{{ url_for('stock_screener') }}">
+        <div class="card-icon icon-blue"><i data-lucide="trending-up"></i></div>
+        <h3>Stock Screener</h3>
+        <p>Filter stocks by index, sector, date range, and % return.</p>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+
+    <a class="menu-card" href="{{ url_for('sector_screener') }}">
+        <div class="card-icon icon-purple"><i data-lucide="layers"></i></div>
+        <h3>Sector Screener</h3>
+        <p>Rank sectors by % return over a date range.</p>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+
+    <a class="menu-card" href="{{ url_for('index_screener') }}">
+        <div class="card-icon icon-green"><i data-lucide="bar-chart-3"></i></div>
+        <h3>Index Screener</h3>
+        <p>Rank indexes by % return over a date range.</p>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+
+    {% if current_user.is_admin %}
+    <a class="menu-card admin-card" href="{{ url_for('upload') }}">
+        <div class="card-icon icon-amber"><i data-lucide="upload-cloud"></i></div>
+        <h3>Upload Data</h3>
+        <p>Upload OHLC data and master files.</p>
+        <span class="badge"><i data-lucide="shield"></i> Admin</span>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+
+    <a class="menu-card admin-card" href="{{ url_for('manage_users') }}">
+        <div class="card-icon icon-rose"><i data-lucide="users"></i></div>
+        <h3>Manage Users</h3>
+        <p>Create or remove user accounts.</p>
+        <span class="badge"><i data-lucide="shield"></i> Admin</span>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+    {% endif %}
+</div>
+{% endblock %}
