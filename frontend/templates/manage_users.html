@@ -25,6 +25,7 @@
                 <label for="new_role"><i data-lucide="shield"></i> Role</label>
                 <select id="new_role" name="role" required>
                     <option value="normal">Normal</option>
+                    <option value="co_admin">Co-admin</option>
                     <option value="admin">Admin</option>
                 </select>
             </div>
@@ -57,6 +58,8 @@
                 <td>
                     {% if u.role == "admin" %}
                         <span class="role-badge role-admin"><i data-lucide="shield-check"></i> Admin</span>
+                    {% elif u.role == "co_admin" %}
+                        <span class="role-badge role-coadmin"><i data-lucide="shield"></i> Co-admin</span>
                     {% else %}
                         <span class="role-badge role-normal">Normal</span>
                     {% endif %}

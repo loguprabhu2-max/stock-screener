@@ -30,11 +30,25 @@
         <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
     </a>
 
-    {% if current_user.is_admin %}
+    {% if current_user.can_upload %}
     <a class="menu-card admin-card" href="{{ url_for('upload') }}">
         <div class="card-icon icon-amber"><i data-lucide="upload-cloud"></i></div>
         <h3>Upload Data</h3>
         <p>Upload OHLC data and master files.</p>
+        {% if current_user.is_admin %}
+            <span class="badge"><i data-lucide="shield"></i> Admin</span>
+        {% else %}
+            <span class="badge badge-coadmin"><i data-lucide="shield"></i> Co-admin</span>
+        {% endif %}
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+    {% endif %}
+
+    {% if current_user.is_admin %}
+    <a class="menu-card admin-card" href="{{ url_for('data_management') }}">
+        <div class="card-icon icon-rose"><i data-lucide="database"></i></div>
+        <h3>Data Management</h3>
+        <p>Delete or download price data by date range.</p>
         <span class="badge"><i data-lucide="shield"></i> Admin</span>
         <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
     </a>

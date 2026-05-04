@@ -56,11 +56,17 @@
             <i data-lucide="bar-chart-3"></i><span>Index Screener</span>
         </a>
 
-        {% if current_user.is_admin %}
-        <div class="nav-section">ADMIN</div>
+        {% if current_user.can_upload %}
+        <div class="nav-section">{% if current_user.is_admin %}ADMIN{% else %}CO-ADMIN{% endif %}</div>
         <a class="nav-link {% if request.endpoint == 'upload' %}active{% endif %}"
            href="{{ url_for('upload') }}">
             <i data-lucide="upload-cloud"></i><span>Upload Data</span>
+        </a>
+        {% endif %}
+        {% if current_user.is_admin %}
+        <a class="nav-link {% if request.endpoint == 'data_management' %}active{% endif %}"
+           href="{{ url_for('data_management') }}">
+            <i data-lucide="database"></i><span>Data Management</span>
         </a>
         <a class="nav-link {% if request.endpoint == 'manage_users' %}active{% endif %}"
            href="{{ url_for('manage_users') }}">
@@ -77,6 +83,8 @@
                 <div class="who-role">
                     {% if current_user.is_admin %}
                     <span class="role-badge role-admin"><i data-lucide="shield-check"></i> Admin</span>
+                    {% elif current_user.is_co_admin %}
+                    <span class="role-badge role-coadmin"><i data-lucide="shield"></i> Co-admin</span>
                     {% else %}
                     <span class="role-badge role-normal">Normal</span>
                     {% endif %}
