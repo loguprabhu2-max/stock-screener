@@ -25,8 +25,8 @@ def create_user(username, password, role):
         return False, "Password is required."
     if len(password) < 6:
         return False, "Password must be at least 6 characters."
-    if role not in ("admin", "normal"):
-        return False, "Role must be 'admin' or 'normal'."
+    if role not in ("admin", "co_admin", "normal"):
+        return False, "Role must be 'admin', 'co_admin', or 'normal'."
 
     existing = query_one(
         "SELECT user_id FROM users WHERE username = %s", (username,)

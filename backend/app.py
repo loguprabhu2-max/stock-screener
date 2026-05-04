@@ -61,6 +61,15 @@ class User(UserMixin):
     def is_admin(self):
         return self.role == "admin"
 
+    @property
+    def is_co_admin(self):
+        return self.role == "co_admin"
+
+    @property
+    def can_upload(self):
+        # Admin and co_admin can both upload
+        return self.role in ("admin", "co_admin")
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -79,6 +88,18 @@ def admin_required(f):
     def wrapper(*args, **kwargs):
         if not current_user.is_admin:
             flash("Admin access required.", "error")
+            return redirect(url_for("dashboard"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def upload_required(f):
+    """Admin OR co_admin can access — both can upload."""
+    @wraps(f)
+    @login_required
+    def wrapper(*args, **kwargs):
+        if not current_user.can_upload:
+            flash("Upload access required.", "error")
             return redirect(url_for("dashboard"))
         return f(*args, **kwargs)
     return wrapper
@@ -371,9 +392,9 @@ def index_screener_download():
     )
 
 
-# ----------------- Upload (admin) -----------------
+# ----------------- Upload (admin + co_admin) -----------------
 @app.route("/upload", methods=["GET", "POST"])
-@admin_required
+@upload_required
 def upload():
     upload_result = None
 
@@ -396,6 +417,101 @@ def upload():
 
     counts = get_table_counts()
     return render_template("upload.html", counts=counts, upload_result=upload_result)
+
+
+# ----------------- Data Management (admin only) -----------------
+import data_management as dm
+
+
+@app.route("/data-management", methods=["GET", "POST"])
+@admin_required
+def data_management():
+    summary = dm.get_data_summary()
+    preview = None
+    delete_result = None
+
+    if request.method == "POST":
+        action = request.form.get("action", "")
+        table = request.form.get("table", "")
+        from_str = request.form.get("from_date", "").strip()
+        to_str = request.form.get("to_date", "").strip()
+
+        from_date = parse_iso_date(from_str)
+        to_date = parse_iso_date(to_str)
+
+        if not from_date or not to_date:
+            flash("Both From Date and To Date are required.", "error")
+            return redirect(url_for("data_management"))
+        if from_date > to_date:
+            flash("From Date must be on or before To Date.", "error")
+            return redirect(url_for("data_management"))
+        valid_tables = ["all"] + list(dm.TABLES.keys())
+        if table not in valid_tables:
+            flash("Please select a valid table.", "error")
+            return redirect(url_for("data_management"))
+
+        if action == "preview":
+            preview = dm.count_rows_in_range(table, from_date, to_date)
+            preview["table"] = table
+            preview["from"] = from_str
+            preview["to"] = to_str
+
+        elif action == "delete":
+            result = dm.delete_in_range(table, from_date, to_date)
+            if "error" in result:
+                flash(f"Error: {result['error']}", "error")
+            else:
+                flash(
+                    f"Deleted {result['deleted']} rows. " + " | ".join(result["details"]),
+                    "success",
+                )
+            return redirect(url_for("data_management"))
+
+    return render_template(
+        "data_management.html",
+        summary=summary,
+        preview=preview,
+        tables=dm.TABLES,
+    )
+
+
+@app.route("/data-management/download", methods=["POST"])
+@admin_required
+def data_management_download():
+    table = request.form.get("table", "")
+    from_str = request.form.get("from_date", "").strip()
+    to_str = request.form.get("to_date", "").strip()
+
+    from_date = parse_iso_date(from_str)
+    to_date = parse_iso_date(to_str)
+
+    if not from_date or not to_date:
+        flash("Both dates are required.", "error")
+        return redirect(url_for("data_management"))
+    if from_date > to_date:
+        flash("From Date must be on or before To Date.", "error")
+        return redirect(url_for("data_management"))
+
+    if table == "all":
+        zip_bytes = dm.export_all_as_zip(from_date, to_date)
+        return Response(
+            zip_bytes,
+            mimetype="application/zip",
+            headers={"Content-Disposition":
+                     f"attachment; filename=all_data_{from_str}_to_{to_str}.zip"},
+        )
+
+    if table not in dm.TABLES:
+        flash("Please select a valid table.", "error")
+        return redirect(url_for("data_management"))
+
+    csv_data = dm.export_csv(table, from_date, to_date)
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition":
+                 f"attachment; filename={table}_{from_str}_to_{to_str}.csv"},
+    )
 
 
 # ----------------- Manage Users (admin) -----------------
