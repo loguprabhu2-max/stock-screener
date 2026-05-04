@@ -484,7 +484,18 @@ body.with-sidebar { display: flex; min-height: 100vh; }
 }
 .role-badge [data-lucide] { width: 12px; height: 12px; }
 .role-admin { background: var(--warn-bg); color: var(--warn); }
+.role-coadmin { background: #ede9fe; color: #6d28d9; }
 .role-normal { background: #dbeafe; color: #2563eb; }
+.badge-coadmin { background: #ede9fe !important; color: #6d28d9 !important; }
+.btn-danger {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.6rem 1.1rem;
+    background: var(--error); color: #fff; border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+}
+.btn-danger:hover { background: #b91c1c; }
 .me-tag {
     display: inline-block; margin-left: 0.4rem;
     padding: 0.1rem 0.5rem; border-radius: 999px;
