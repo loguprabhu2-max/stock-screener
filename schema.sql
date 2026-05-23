@@ -13,7 +13,7 @@ CREATE TABLE users (
     user_id        SERIAL PRIMARY KEY,
     username       VARCHAR(50) UNIQUE NOT NULL,
     password_hash  TEXT NOT NULL,
-    role           VARCHAR(10) NOT NULL CHECK (role IN ('admin', 'normal')),
+    role           VARCHAR(15) NOT NULL CHECK (role IN ('admin', 'co_admin', 'normal')),
     created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -34,12 +34,17 @@ CREATE TABLE stocks_master (
 );
 
 CREATE TABLE stock_prices (
-    date          DATE NOT NULL,
-    stock_symbol  VARCHAR(50) NOT NULL,
-    open          NUMERIC(15, 4) NOT NULL,
-    high          NUMERIC(15, 4) NOT NULL,
-    low           NUMERIC(15, 4) NOT NULL,
-    close         NUMERIC(15, 4) NOT NULL,
+    date              DATE NOT NULL,
+    stock_symbol      VARCHAR(50) NOT NULL,
+    open              NUMERIC(15, 4) NOT NULL,
+    high              NUMERIC(15, 4) NOT NULL,
+    low               NUMERIC(15, 4) NOT NULL,
+    close             NUMERIC(15, 4) NOT NULL,
+    total_trade_qty   BIGINT,
+    turnover_lakhs    NUMERIC(15, 4),
+    no_of_trades      INTEGER,
+    delivery_qty      BIGINT,
+    delivery_pct      NUMERIC(7, 4),
     PRIMARY KEY (date, stock_symbol)
 );
 CREATE INDEX idx_stock_prices_symbol_date ON stock_prices(stock_symbol, date);

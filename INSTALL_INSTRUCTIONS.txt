@@ -1,0 +1,91 @@
+============================================================
+  MULTI-SECTOR + STOCK PRICE COLUMNS UPDATE
+============================================================
+
+What's new:
+  1. Stock 'sector' field now accepts COMMA-SEPARATED values
+     (just like indexes). Example:
+        sector = "Banking, Financial Services"
+     Each value is validated against sectors_master.
+  2. stock_prices CSV now requires 5 NEW columns:
+        total_trade_qty   - integer (volume)
+        turnover_lakhs    - decimal (turnover in lakhs)
+        no_of_trades      - integer (number of trades)
+        delivery_qty      - integer (delivery quantity)
+        delivery_pct      - decimal (delivery percentage 0-100)
+  3. Stock Screener results now show an "Avg Delivery %"
+     column (info only - % Return remains the filter).
+
+------------------------------------------------------------
+STEP 1 - RUN THE MIGRATION SQL (CRITICAL - FIRST)
+------------------------------------------------------------
+This adds the 5 new columns to your existing stock_prices
+table without losing data.
+
+Open MIGRATION.sql in this update folder. Copy the SQL.
+
+Run it in BOTH places:
+
+  A) Local PostgreSQL (pgAdmin):
+     - Open pgAdmin
+     - Right-click stock_screener DB -> Query Tool
+     - Paste MIGRATION.sql contents -> Execute (F5)
+     - Should see: "stock_prices columns added"
+
+  B) Supabase (if you still use it):
+     - Open Supabase -> SQL Editor -> New query
+     - Paste MIGRATION.sql contents -> Run
+     - Click "Run without RLS" if warned
+
+You only need to do this once per database.
+
+------------------------------------------------------------
+STEP 2 - REPLACE FILES IN YOUR website FOLDER
+------------------------------------------------------------
+Drag the contents of this update ZIP into your website folder.
+Replace files when Windows asks.
+
+REPLACED:
+  backend/app.py
+  backend/uploads.py
+  backend/screeners.py
+  frontend/templates/stock_screener.html
+  frontend/templates/upload.html
+  schema.sql
+  Excel format/stock_prices_sample.csv
+
+NEW (just here for reference, you don't copy this anywhere):
+  MIGRATION.sql
+
+------------------------------------------------------------
+STEP 3 - LAUNCH AND TEST
+------------------------------------------------------------
+Double-click START.bat. Login as admin.
+
+Test the multi-sector fix:
+  - Re-upload your stocks_master.csv if it had errors before
+  - In the 'sector' column, comma-separated values now work
+    (just like indexes). Each sector name must exist in
+    sectors_master.
+
+Test the new stock_prices format:
+  - Use Excel format/stock_prices_sample.csv as the template
+  - Upload your stock_prices CSV with the 5 new columns
+  - Upload will reject the file if any of these columns are
+    missing or contain non-numeric values
+
+Test the new screener column:
+  - Run a stock screener with a date range
+  - The result table should show an extra "Avg Delivery %"
+    column at the right
+  - CSV download also includes this column
+
+------------------------------------------------------------
+NOTES ON EXISTING DATA
+------------------------------------------------------------
+- After Step 1, old stock_prices rows have NULL for the 5
+  new columns. The screener will show "-" for those rows'
+  Avg Delivery %.
+- To get real values, re-upload your stock_prices.csv with
+  the new format. Existing rows for the same (date, symbol)
+  will be updated with the new column values.
