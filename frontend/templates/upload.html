@@ -90,7 +90,7 @@
             <h3>Stock Prices</h3>
             <span class="row-count">{{ counts.stock_prices }} rows</span>
         </div>
-        <p class="card-desc">Daily OHLC for stocks. Columns: <code>date</code>, <code>stock_symbol</code>, <code>open</code>, <code>high</code>, <code>low</code>, <code>close</code></p>
+        <p class="card-desc">Daily OHLC + volume for stocks. Columns: <code>date</code>, <code>stock_symbol</code>, <code>open</code>, <code>high</code>, <code>low</code>, <code>close</code>, <code>total_trade_qty</code>, <code>turnover_lakhs</code>, <code>no_of_trades</code>, <code>delivery_qty</code>, <code>delivery_pct</code></p>
         <p class="behavior"><i data-lucide="refresh-cw"></i> Inserts new; updates existing (date+symbol).</p>
         <form method="POST" action="{{ url_for('upload') }}" enctype="multipart/form-data">
             <input type="hidden" name="upload_type" value="stock_prices">

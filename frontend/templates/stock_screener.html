@@ -103,6 +103,7 @@
                         <th>Indexes</th>
                         <th title="Most recent close in database">Latest Price</th>
                         <th class="num">% Return</th>
+                        <th class="num" title="Average delivery % across the selected date range (info only)">Avg Delivery %</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -118,6 +119,9 @@
                         </td>
                         <td class="num {% if r.return_pct >= 0 %}positive{% else %}negative{% endif %}">
                             {{ r.return_pct }}%
+                        </td>
+                        <td class="num">
+                            {% if r.avg_delivery_pct is not none %}{{ r.avg_delivery_pct }}%{% else %}&mdash;{% endif %}
                         </td>
                     </tr>
                     {% endfor %}

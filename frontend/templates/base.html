@@ -90,22 +90,39 @@
                     {% endif %}
                 </div>
             </div>
+            <a href="{{ url_for('logout') }}" class="chip-logout" title="Logout">
+                <i data-lucide="log-out"></i>
+            </a>
         </div>
-        <a href="{{ url_for('logout') }}" class="btn-logout">
-            <i data-lucide="log-out"></i> Logout
-        </a>
     </div>
 </aside>
 
-<main class="main-content">
-    {% block content %}{% endblock %}
-</main>
+<div class="main-wrap">
+    <header class="topbar">
+        <div class="topbar-search">
+            <i data-lucide="search"></i>
+            <input type="text" placeholder="Search anything..." disabled>
+        </div>
+        <div class="topbar-actions">
+            <button class="iconbtn" type="button" title="Notifications">
+                <i data-lucide="bell"></i>
+            </button>
+            <div class="topbar-avatar" title="{{ current_user.username }}">
+                {{ current_user.username[0]|upper }}
+                <span class="status-dot"></span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+</div>
 {% else %}
 {% block content_no_sidebar %}{% endblock %}
 {% endif %}
 
 <script>
-// Render Lucide icons
 if (window.lucide) lucide.createIcons();
 
 // Auto-dismiss flash messages after 4 seconds
