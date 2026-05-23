@@ -21,6 +21,7 @@ from screeners import (
 )
 from date_utils import format_display
 import users as users_mod
+from dashboard_stats import get_overview_stats
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FRONTEND = PROJECT_ROOT / "frontend"
@@ -151,7 +152,8 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    return render_template("dashboard.html")
+    stats = get_overview_stats()
+    return render_template("dashboard.html", stats=stats)
 
 
 # ----------------- API: available dates for calendars -----------------
@@ -307,11 +309,12 @@ def stock_screener_download():
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(["Stock Symbol", "Stock Name", "Sector", "Indexes",
-                     "Latest Date", "Latest Price", "% Return"])
+                     "Latest Date", "Latest Price", "% Return", "Avg Delivery %"])
     for r in results:
         writer.writerow([
             r["stock_symbol"], r["stock_name"], r["sector"], r["indexes"],
             r["latest_date"], r["latest_price"], r["return_pct"],
+            r["avg_delivery_pct"] if r["avg_delivery_pct"] is not None else "",
         ])
     csv_data = out.getvalue()
     return Response(

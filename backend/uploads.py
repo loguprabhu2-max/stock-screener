@@ -186,8 +186,10 @@ def validate_stocks_master(df):
 
         if not sector:
             errors.append(f"Row {rn} | sector | empty value")
-        elif sector not in existing_sectors:
-            errors.append(f"Row {rn} | sector | '{sector}' not found in sectors_master")
+        else:
+            for sec in [x.strip() for x in sector.split(",") if x.strip()]:
+                if sec not in existing_sectors:
+                    errors.append(f"Row {rn} | sector | '{sec}' not found in sectors_master")
 
         if not idx_str:
             errors.append(f"Row {rn} | indexes | empty value")
@@ -223,12 +225,20 @@ def insert_stocks_master(df):
 # DAILY PRICE VALIDATORS + INSERTERS  (UPSERT on duplicate)
 # ============================================================
 
+# Numeric columns required in stock_prices uploads (extended)
+STOCK_NUMERIC_COLS = [
+    "open", "high", "low", "close",
+    "total_trade_qty", "turnover_lakhs", "no_of_trades",
+    "delivery_qty", "delivery_pct",
+]
+# Generic OHLC for sector/index (unchanged)
 OHLC_COLS = ["open", "high", "low", "close"]
 
 
-def _validate_ohlc_row(rn, row, errors):
+def _validate_numeric_row(rn, row, cols, errors):
+    """Each named column must have a parseable number. Returns True if no errors."""
     ok = True
-    for c in OHLC_COLS:
+    for c in cols:
         v = row.get(c, "")
         if not v:
             errors.append(f"Row {rn} | {c} | empty value")
@@ -239,9 +249,18 @@ def _validate_ohlc_row(rn, row, errors):
     return ok
 
 
+def _validate_ohlc_row(rn, row, errors):
+    """Legacy helper for sector/index uploads. Validates open/high/low/close only."""
+    return _validate_numeric_row(rn, row, OHLC_COLS, errors)
+
+
 def validate_stock_prices(df):
     errors = []
-    errors += check_required_columns(df, ["date", "stock_symbol", "open", "high", "low", "close"])
+    errors += check_required_columns(df, [
+        "date", "stock_symbol", "open", "high", "low", "close",
+        "total_trade_qty", "turnover_lakhs", "no_of_trades",
+        "delivery_qty", "delivery_pct",
+    ])
     if errors:
         return False, errors, None
 
@@ -272,7 +291,7 @@ def validate_stock_prices(df):
         else:
             seen.add(key)
 
-        _validate_ohlc_row(rn, row, errors)
+        _validate_numeric_row(rn, row, STOCK_NUMERIC_COLS, errors)
 
     return (len(errors) == 0), errors, df
 
@@ -284,13 +303,25 @@ def insert_stock_prices(df):
             for _, row in df.iterrows():
                 iso_date = to_iso_date(row["date"])
                 cur.execute(
-                    """INSERT INTO stock_prices (date, stock_symbol, open, high, low, close)
-                       VALUES (%s, %s, %s, %s, %s, %s)
+                    """INSERT INTO stock_prices (
+                           date, stock_symbol,
+                           open, high, low, close,
+                           total_trade_qty, turnover_lakhs, no_of_trades,
+                           delivery_qty, delivery_pct
+                       )
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                        ON CONFLICT (date, stock_symbol) DO UPDATE SET
                          open = EXCLUDED.open, high = EXCLUDED.high,
-                         low = EXCLUDED.low, close = EXCLUDED.close""",
+                         low = EXCLUDED.low, close = EXCLUDED.close,
+                         total_trade_qty = EXCLUDED.total_trade_qty,
+                         turnover_lakhs = EXCLUDED.turnover_lakhs,
+                         no_of_trades = EXCLUDED.no_of_trades,
+                         delivery_qty = EXCLUDED.delivery_qty,
+                         delivery_pct = EXCLUDED.delivery_pct""",
                     (iso_date, row["stock_symbol"],
-                     row["open"], row["high"], row["low"], row["close"]),
+                     row["open"], row["high"], row["low"], row["close"],
+                     row["total_trade_qty"], row["turnover_lakhs"], row["no_of_trades"],
+                     row["delivery_qty"], row["delivery_pct"]),
                 )
             conn.commit()
         return True, f"Inserted/updated {len(df)} rows in stock_prices.", len(df)

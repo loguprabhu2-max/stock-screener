@@ -105,8 +105,11 @@ def run_stock_screener(index_filter, sector_filter, from_date, to_date, threshol
         )
         params.append(f"%,{index_filter},%")
     if sector_filter and sector_filter != "All":
-        where_clauses.append("sector = %s")
-        params.append(sector_filter)
+        # sector column is comma-separated; match exact name
+        where_clauses.append(
+            "(',' || REPLACE(sector, ', ', ',') || ',') LIKE %s"
+        )
+        params.append(f"%,{sector_filter},%")
 
     where_sql = ""
     if where_clauses:
@@ -155,6 +158,17 @@ def run_stock_screener(index_filter, sector_filter, from_date, to_date, threshol
         ret_pct = (end_close - base_close) / base_close * 100.0
         if ret_pct >= threshold_pct:
             latest_date, latest_close = _latest_close("stock_prices", "stock_symbol", symbol)
+            # Average delivery % over the screened period (from_date to to_date inclusive)
+            avg_delivery = query_all(
+                """SELECT AVG(delivery_pct) AS avg_dp
+                   FROM stock_prices
+                   WHERE stock_symbol = %s AND date BETWEEN %s AND %s
+                     AND delivery_pct IS NOT NULL""",
+                (symbol, from_date, to_date),
+            )
+            avg_dp_val = None
+            if avg_delivery and avg_delivery[0]["avg_dp"] is not None:
+                avg_dp_val = round(float(avg_delivery[0]["avg_dp"]), 2)
             results.append({
                 "stock_symbol": symbol,
                 "stock_name": s["stock_name"],
@@ -167,6 +181,7 @@ def run_stock_screener(index_filter, sector_filter, from_date, to_date, threshol
                 "latest_date": format_display(latest_date) if latest_date else "",
                 "latest_price": round(latest_close, 2) if latest_close is not None else None,
                 "return_pct": round(ret_pct, 2),
+                "avg_delivery_pct": avg_dp_val,
             })
 
     # Sort by return_pct descending
