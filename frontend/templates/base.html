@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Stock Screener{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+</head>
+<body class="{% block body_class %}with-sidebar{% endblock %}">
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flash-container" id="flashContainer">
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}">
+          <span class="flash-icon">
+            {% if category == 'success' %}<i data-lucide="check-circle"></i>
+            {% elif category == 'error' %}<i data-lucide="alert-circle"></i>
+            {% else %}<i data-lucide="info"></i>{% endif %}
+          </span>
+          <span class="flash-text">{{ message }}</span>
+          <button class="flash-close" type="button" aria-label="Dismiss">&times;</button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+{% if current_user.is_authenticated and self.body_class()|trim != 'no-chrome' %}
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <div class="brand-mark"><i data-lucide="line-chart"></i></div>
+        <div class="brand-text">
+            <div class="brand-name">Stock Screener</div>
+            <div class="brand-sub">v1.0</div>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <a class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}"
+           href="{{ url_for('dashboard') }}">
+            <i data-lucide="home"></i><span>Dashboard</span>
+        </a>
+        <div class="nav-section">SCREENERS</div>
+        <a class="nav-link {% if request.endpoint == 'stock_screener' %}active{% endif %}"
+           href="{{ url_for('stock_screener') }}">
+            <i data-lucide="trending-up"></i><span>Stock Screener</span>
+        </a>
+        <a class="nav-link {% if request.endpoint == 'sector_screener' %}active{% endif %}"
+           href="{{ url_for('sector_screener') }}">
+            <i data-lucide="layers"></i><span>Sector Screener</span>
+        </a>
+        <a class="nav-link {% if request.endpoint == 'index_screener' %}active{% endif %}"
+           href="{{ url_for('index_screener') }}">
+            <i data-lucide="bar-chart-3"></i><span>Index Screener</span>
+        </a>
+
+        {% if current_user.can_upload %}
+        <div class="nav-section">{% if current_user.is_admin %}ADMIN{% else %}CO-ADMIN{% endif %}</div>
+        <a class="nav-link {% if request.endpoint == 'upload' %}active{% endif %}"
+           href="{{ url_for('upload') }}">
+            <i data-lucide="upload-cloud"></i><span>Upload Data</span>
+        </a>
+        {% endif %}
+        {% if current_user.is_admin %}
+        <a class="nav-link {% if request.endpoint == 'data_management' %}active{% endif %}"
+           href="{{ url_for('data_management') }}">
+            <i data-lucide="database"></i><span>Data Management</span>
+        </a>
+        <a class="nav-link {% if request.endpoint == 'manage_users' %}active{% endif %}"
+           href="{{ url_for('manage_users') }}">
+            <i data-lucide="users"></i><span>Manage Users</span>
+        </a>
+        {% endif %}
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="user-chip">
+            <div class="avatar">{{ current_user.username[0]|upper }}</div>
+            <div class="who">
+                <div class="who-name">{{ current_user.username }}</div>
+                <div class="who-role">
+                    {% if current_user.is_admin %}
+                    <span class="role-badge role-admin"><i data-lucide="shield-check"></i> Admin</span>
+                    {% elif current_user.is_co_admin %}
+                    <span class="role-badge role-coadmin"><i data-lucide="shield"></i> Co-admin</span>
+                    {% else %}
+                    <span class="role-badge role-normal">Normal</span>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="{{ url_for('logout') }}" class="chip-logout" title="Logout">
+                <i data-lucide="log-out"></i>
+            </a>
+        </div>
+    </div>
+</aside>
+
+<div class="main-wrap">
+    <header class="topbar">
+        <div class="topbar-search">
+            <i data-lucide="search"></i>
+            <input type="text" placeholder="Search anything..." disabled>
+        </div>
+        <div class="topbar-actions">
+            <button class="iconbtn" type="button" title="Notifications">
+                <i data-lucide="bell"></i>
+            </button>
+            <div class="topbar-avatar" title="{{ current_user.username }}">
+                {{ current_user.username[0]|upper }}
+                <span class="status-dot"></span>
+            </div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+{% else %}
+{% block content_no_sidebar %}{% endblock %}
+{% endif %}
+
+<script>
+if (window.lucide) lucide.createIcons();
+
+// Auto-dismiss flash messages after 4 seconds
+document.querySelectorAll('.flash').forEach(function (el) {
+    var t = setTimeout(function () { fadeAndRemove(el); }, 4000);
+    var btn = el.querySelector('.flash-close');
+    if (btn) btn.addEventListener('click', function () {
+        clearTimeout(t);
+        fadeAndRemove(el);
+    });
+});
+function fadeAndRemove(el) {
+    el.classList.add('flash-fade');
+    setTimeout(function () { el.remove(); }, 300);
+}
+</script>
+</body>
+</html>
