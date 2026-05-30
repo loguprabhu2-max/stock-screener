@@ -2,6 +2,8 @@
 import os
 import csv
 import io
+import threading
+import uuid
 from pathlib import Path
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, Response, jsonify
@@ -34,7 +36,7 @@ app = Flask(
     static_folder=str(FRONTEND / "static"),
 )
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-key-change-me")
-app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
+app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024  # 200 MB — supports lakh-scale CSV files
 
 # In production, refuse to start with the default secret key
 if os.getenv("RENDER") or os.getenv("FLASK_ENV") == "production":
@@ -428,31 +430,73 @@ def index_screener_download():
     )
 
 
-# ----------------- Upload (admin + co_admin) -----------------
+# ----------------- Upload (admin + co_admin) — async background processing -----------------
+
+# In-memory job store: job_id -> {status, stage, progress, result}
+# Jobs persist for the lifetime of the process; memory impact is negligible.
+_jobs: dict = {}
+
+
+def _run_upload_job(upload_type: str, file_bytes: bytes, filename: str, job_id: str) -> None:
+    """Execute the upload pipeline in a background thread."""
+    try:
+        result = handle_upload(upload_type, file_bytes, filename, job_id=job_id, jobs=_jobs)
+        _jobs[job_id].update({
+            "status": "done",
+            "result": result,
+            "stage": "Complete",
+            "progress": 100,
+        })
+    except Exception as exc:  # pragma: no cover
+        _jobs[job_id].update({
+            "status": "error",
+            "result": {"success": False, "errors": [str(exc)], "message": "", "rows": 0},
+            "stage": "Error",
+            "progress": 0,
+        })
+
+
 @app.route("/upload", methods=["GET", "POST"])
 @upload_required
 def upload():
-    upload_result = None
-
     if request.method == "POST":
         upload_type = request.form.get("upload_type", "")
         file = request.files.get("file")
 
         if not file or not file.filename:
-            flash("Please select a file to upload.", "error")
-            return redirect(url_for("upload"))
+            return jsonify({"error": "Please select a file to upload."}), 400
 
         if upload_type not in UPLOAD_HANDLERS:
-            flash(f"Unknown upload type: {upload_type}", "error")
-            return redirect(url_for("upload"))
+            return jsonify({"error": f"Unknown upload type: {upload_type}"}), 400
 
-        upload_result = handle_upload(upload_type, file)
+        # Read file bytes in main thread — file stream is not thread-safe
+        file_bytes = file.read()
+        filename = file.filename
 
-        if upload_result["success"]:
-            flash(upload_result["message"], "success")
+        job_id = str(uuid.uuid4())
+        _jobs[job_id] = {"status": "processing", "stage": "Starting...", "progress": 2}
+
+        t = threading.Thread(
+            target=_run_upload_job,
+            args=(upload_type, file_bytes, filename, job_id),
+            daemon=True,
+        )
+        t.start()
+
+        return jsonify({"job_id": job_id})
 
     counts = get_table_counts()
-    return render_template("upload.html", counts=counts, upload_result=upload_result)
+    return render_template("upload.html", counts=counts)
+
+
+@app.route("/api/upload-status/<job_id>")
+@login_required
+def upload_job_status(job_id):
+    """Polled by the frontend every 500 ms to get upload progress and result."""
+    job = _jobs.get(job_id)
+    if not job:
+        return jsonify({"error": "Job not found"}), 404
+    return jsonify(job)
 
 
 # ----------------- Data Management (admin only) -----------------
