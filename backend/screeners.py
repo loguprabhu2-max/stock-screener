@@ -12,6 +12,9 @@ Return formula:
   return_pct = (end_close - base_close) / base_close * 100
 
 A row is included when return_pct >= threshold (user-supplied %).
+
+PERFORMANCE: All three screeners use single batched queries (DISTINCT ON)
+instead of per-item loops. This keeps the page fast even with years of data.
 """
 from datetime import date, datetime
 from database import query_all
@@ -65,47 +68,29 @@ def get_date_range(table):
     }
 
 
-def _latest_close(table, name_col, name_val):
-    """Get most recent (date, close) for an item from its price table."""
-    rows = query_all(
-        f"""SELECT date, close FROM {table}
-            WHERE {name_col} = %s
-            ORDER BY date DESC LIMIT 1""",
-        (name_val,),
-    )
-    if not rows:
-        return None, None
-    return rows[0]["date"], float(rows[0]["close"])
-
-
 # ============================================================
-# Stock Screener
+# Stock Screener (optimized: single batched queries)
 # ============================================================
 
 def run_stock_screener(index_filter, sector_filter, from_date, to_date, threshold_pct):
     """
     Filter stocks by index AND/OR sector, then by % return between dates.
 
-    index_filter:  "All" or a specific index name
-    sector_filter: "All" or a specific sector name
-    from_date, to_date: date objects
-    threshold_pct: float (only stocks with return >= this are returned)
-
-    Returns: (results_list, info_dict)
-      results_list: list of dicts with stock data and % return
-      info_dict: counts of stocks considered/excluded (for transparency)
+    Uses 4 total queries regardless of stock count:
+      1. List of matching stocks
+      2. Base close for all stocks (strictly before from_date)
+      3. End close + latest close for all stocks (<= to_date)
+      4. Avg delivery % for all stocks in [from_date, to_date]
     """
     # Step 1: Pick stocks matching index + sector filter
     where_clauses = []
     params = []
     if index_filter and index_filter != "All":
-        # indexes column is comma-separated; match exact name
         where_clauses.append(
             "(',' || REPLACE(indexes, ', ', ',') || ',') LIKE %s"
         )
         params.append(f"%,{index_filter},%")
     if sector_filter and sector_filter != "All":
-        # sector column is comma-separated; match exact name
         where_clauses.append(
             "(',' || REPLACE(sector, ', ', ',') || ',') LIKE %s"
         )
@@ -125,66 +110,92 @@ def run_stock_screener(index_filter, sector_filter, from_date, to_date, threshol
     if not stocks:
         return [], {"total": 0, "matched": 0, "excluded_no_data": 0}
 
-    # Step 2: For each stock, find base_close (strictly before from_date)
-    # and end_close (on or before to_date) and compute return.
+    symbols = tuple(s["stock_symbol"] for s in stocks)
+
+    # Step 2: Base close (most recent close strictly BEFORE from_date) for ALL stocks
+    base_rows = query_all(
+        """SELECT DISTINCT ON (stock_symbol)
+                  stock_symbol, date, close
+           FROM stock_prices
+           WHERE stock_symbol IN %s AND date < %s
+           ORDER BY stock_symbol, date DESC""",
+        (symbols, from_date),
+    )
+    base_map = {r["stock_symbol"]: r for r in base_rows}
+
+    # Step 3: End close (most recent close ON OR BEFORE to_date) for ALL stocks
+    end_rows = query_all(
+        """SELECT DISTINCT ON (stock_symbol)
+                  stock_symbol, date, close
+           FROM stock_prices
+           WHERE stock_symbol IN %s AND date <= %s
+           ORDER BY stock_symbol, date DESC""",
+        (symbols, to_date),
+    )
+    end_map = {r["stock_symbol"]: r for r in end_rows}
+
+    # Step 3b: Latest close overall (for the "Latest Price" column) for ALL stocks
+    latest_rows = query_all(
+        """SELECT DISTINCT ON (stock_symbol)
+                  stock_symbol, date, close
+           FROM stock_prices
+           WHERE stock_symbol IN %s
+           ORDER BY stock_symbol, date DESC""",
+        (symbols,),
+    )
+    latest_map = {r["stock_symbol"]: r for r in latest_rows}
+
+    # Step 4: Avg delivery % across screening window for ALL stocks
+    delivery_rows = query_all(
+        """SELECT stock_symbol, AVG(delivery_pct) AS avg_dp
+           FROM stock_prices
+           WHERE stock_symbol IN %s
+             AND date BETWEEN %s AND %s
+             AND delivery_pct IS NOT NULL
+           GROUP BY stock_symbol""",
+        (symbols, from_date, to_date),
+    )
+    delivery_map = {r["stock_symbol"]: r["avg_dp"] for r in delivery_rows}
+
+    # Step 5: Compute returns in Python (cheap now — no DB calls)
     results = []
     excluded = 0
     for s in stocks:
         symbol = s["stock_symbol"]
-
-        base_row = query_all(
-            """SELECT date, close FROM stock_prices
-               WHERE stock_symbol = %s AND date < %s
-               ORDER BY date DESC LIMIT 1""",
-            (symbol, from_date),
-        )
-        end_row = query_all(
-            """SELECT date, close FROM stock_prices
-               WHERE stock_symbol = %s AND date <= %s
-               ORDER BY date DESC LIMIT 1""",
-            (symbol, to_date),
-        )
+        base_row = base_map.get(symbol)
+        end_row = end_map.get(symbol)
 
         if not base_row or not end_row:
             excluded += 1
             continue
 
-        base_close = float(base_row[0]["close"])
-        end_close = float(end_row[0]["close"])
+        base_close = float(base_row["close"])
+        end_close = float(end_row["close"])
         if base_close == 0:
             excluded += 1
             continue
 
         ret_pct = (end_close - base_close) / base_close * 100.0
         if ret_pct >= threshold_pct:
-            latest_date, latest_close = _latest_close("stock_prices", "stock_symbol", symbol)
-            # Average delivery % over the screened period (from_date to to_date inclusive)
-            avg_delivery = query_all(
-                """SELECT AVG(delivery_pct) AS avg_dp
-                   FROM stock_prices
-                   WHERE stock_symbol = %s AND date BETWEEN %s AND %s
-                     AND delivery_pct IS NOT NULL""",
-                (symbol, from_date, to_date),
-            )
-            avg_dp_val = None
-            if avg_delivery and avg_delivery[0]["avg_dp"] is not None:
-                avg_dp_val = round(float(avg_delivery[0]["avg_dp"]), 2)
+            latest_row = latest_map.get(symbol)
+            avg_dp = delivery_map.get(symbol)
+            avg_dp_val = round(float(avg_dp), 2) if avg_dp is not None else None
+
             results.append({
                 "stock_symbol": symbol,
                 "stock_name": s["stock_name"],
                 "sector": s["sector"],
                 "indexes": s["indexes"],
-                "base_date": format_display(base_row[0]["date"]),
+                "base_date": format_display(base_row["date"]),
                 "base_close": round(base_close, 2),
-                "end_date": format_display(end_row[0]["date"]),
+                "end_date": format_display(end_row["date"]),
                 "end_close": round(end_close, 2),
-                "latest_date": format_display(latest_date) if latest_date else "",
-                "latest_price": round(latest_close, 2) if latest_close is not None else None,
+                "latest_date": format_display(latest_row["date"]) if latest_row else "",
+                "latest_price": round(float(latest_row["close"]), 2) if latest_row else None,
                 "return_pct": round(ret_pct, 2),
                 "avg_delivery_pct": avg_dp_val,
             })
 
-    # Sort by return_pct descending
     results.sort(key=lambda r: r["return_pct"], reverse=True)
 
     return results, {
@@ -195,7 +206,7 @@ def run_stock_screener(index_filter, sector_filter, from_date, to_date, threshol
 
 
 # ============================================================
-# Sector Screener
+# Sector Screener (optimized)
 # ============================================================
 
 def run_sector_screener(from_date, to_date, threshold_pct):
@@ -206,45 +217,66 @@ def run_sector_screener(from_date, to_date, threshold_pct):
     if not sectors:
         return [], {"total": 0, "matched": 0, "excluded_no_data": 0}
 
+    names = tuple(s["sector_name"] for s in sectors)
+
+    base_rows = query_all(
+        """SELECT DISTINCT ON (sector_name)
+                  sector_name, date, close
+           FROM sector_prices
+           WHERE sector_name IN %s AND date < %s
+           ORDER BY sector_name, date DESC""",
+        (names, from_date),
+    )
+    base_map = {r["sector_name"]: r for r in base_rows}
+
+    end_rows = query_all(
+        """SELECT DISTINCT ON (sector_name)
+                  sector_name, date, close
+           FROM sector_prices
+           WHERE sector_name IN %s AND date <= %s
+           ORDER BY sector_name, date DESC""",
+        (names, to_date),
+    )
+    end_map = {r["sector_name"]: r for r in end_rows}
+
+    latest_rows = query_all(
+        """SELECT DISTINCT ON (sector_name)
+                  sector_name, date, close
+           FROM sector_prices
+           WHERE sector_name IN %s
+           ORDER BY sector_name, date DESC""",
+        (names,),
+    )
+    latest_map = {r["sector_name"]: r for r in latest_rows}
+
     results = []
     excluded = 0
     for s in sectors:
         name = s["sector_name"]
-
-        base_row = query_all(
-            """SELECT date, close FROM sector_prices
-               WHERE sector_name = %s AND date < %s
-               ORDER BY date DESC LIMIT 1""",
-            (name, from_date),
-        )
-        end_row = query_all(
-            """SELECT date, close FROM sector_prices
-               WHERE sector_name = %s AND date <= %s
-               ORDER BY date DESC LIMIT 1""",
-            (name, to_date),
-        )
+        base_row = base_map.get(name)
+        end_row = end_map.get(name)
 
         if not base_row or not end_row:
             excluded += 1
             continue
 
-        base_close = float(base_row[0]["close"])
-        end_close = float(end_row[0]["close"])
+        base_close = float(base_row["close"])
+        end_close = float(end_row["close"])
         if base_close == 0:
             excluded += 1
             continue
 
         ret_pct = (end_close - base_close) / base_close * 100.0
         if ret_pct >= threshold_pct:
-            latest_date, latest_close = _latest_close("sector_prices", "sector_name", name)
+            latest_row = latest_map.get(name)
             results.append({
                 "sector_name": name,
-                "base_date": format_display(base_row[0]["date"]),
+                "base_date": format_display(base_row["date"]),
                 "base_close": round(base_close, 2),
-                "end_date": format_display(end_row[0]["date"]),
+                "end_date": format_display(end_row["date"]),
                 "end_close": round(end_close, 2),
-                "latest_date": format_display(latest_date) if latest_date else "",
-                "latest_price": round(latest_close, 2) if latest_close is not None else None,
+                "latest_date": format_display(latest_row["date"]) if latest_row else "",
+                "latest_price": round(float(latest_row["close"]), 2) if latest_row else None,
                 "return_pct": round(ret_pct, 2),
             })
 
@@ -258,7 +290,7 @@ def run_sector_screener(from_date, to_date, threshold_pct):
 
 
 # ============================================================
-# Index Screener
+# Index Screener (optimized)
 # ============================================================
 
 def run_index_screener(from_date, to_date, threshold_pct):
@@ -269,45 +301,66 @@ def run_index_screener(from_date, to_date, threshold_pct):
     if not indexes:
         return [], {"total": 0, "matched": 0, "excluded_no_data": 0}
 
+    names = tuple(ix["index_name"] for ix in indexes)
+
+    base_rows = query_all(
+        """SELECT DISTINCT ON (index_name)
+                  index_name, date, close
+           FROM index_prices
+           WHERE index_name IN %s AND date < %s
+           ORDER BY index_name, date DESC""",
+        (names, from_date),
+    )
+    base_map = {r["index_name"]: r for r in base_rows}
+
+    end_rows = query_all(
+        """SELECT DISTINCT ON (index_name)
+                  index_name, date, close
+           FROM index_prices
+           WHERE index_name IN %s AND date <= %s
+           ORDER BY index_name, date DESC""",
+        (names, to_date),
+    )
+    end_map = {r["index_name"]: r for r in end_rows}
+
+    latest_rows = query_all(
+        """SELECT DISTINCT ON (index_name)
+                  index_name, date, close
+           FROM index_prices
+           WHERE index_name IN %s
+           ORDER BY index_name, date DESC""",
+        (names,),
+    )
+    latest_map = {r["index_name"]: r for r in latest_rows}
+
     results = []
     excluded = 0
     for ix in indexes:
         name = ix["index_name"]
-
-        base_row = query_all(
-            """SELECT date, close FROM index_prices
-               WHERE index_name = %s AND date < %s
-               ORDER BY date DESC LIMIT 1""",
-            (name, from_date),
-        )
-        end_row = query_all(
-            """SELECT date, close FROM index_prices
-               WHERE index_name = %s AND date <= %s
-               ORDER BY date DESC LIMIT 1""",
-            (name, to_date),
-        )
+        base_row = base_map.get(name)
+        end_row = end_map.get(name)
 
         if not base_row or not end_row:
             excluded += 1
             continue
 
-        base_close = float(base_row[0]["close"])
-        end_close = float(end_row[0]["close"])
+        base_close = float(base_row["close"])
+        end_close = float(end_row["close"])
         if base_close == 0:
             excluded += 1
             continue
 
         ret_pct = (end_close - base_close) / base_close * 100.0
         if ret_pct >= threshold_pct:
-            latest_date, latest_close = _latest_close("index_prices", "index_name", name)
+            latest_row = latest_map.get(name)
             results.append({
                 "index_name": name,
-                "base_date": format_display(base_row[0]["date"]),
+                "base_date": format_display(base_row["date"]),
                 "base_close": round(base_close, 2),
-                "end_date": format_display(end_row[0]["date"]),
+                "end_date": format_display(end_row["date"]),
                 "end_close": round(end_close, 2),
-                "latest_date": format_display(latest_date) if latest_date else "",
-                "latest_price": round(latest_close, 2) if latest_close is not None else None,
+                "latest_date": format_display(latest_row["date"]) if latest_row else "",
+                "latest_price": round(float(latest_row["close"]), 2) if latest_row else None,
                 "return_pct": round(ret_pct, 2),
             })
 
