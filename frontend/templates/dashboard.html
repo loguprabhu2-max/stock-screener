@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Stock Screener{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Welcome back, {{ current_user.username }} <span class="wave">👋</span></h1>
+        <p class="subtitle">Pick a tool from the sidebar to get started.</p>
+    </div>
+</div>
+
+<div class="card-grid">
+    <a class="menu-card" href="{{ url_for('stock_screener') }}">
+        <div class="card-icon icon-blue"><i data-lucide="trending-up"></i></div>
+        <h3>Stock Screener</h3>
+        <p>Filter stocks by index, sector, date range, and % return.</p>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+
+    <a class="menu-card" href="{{ url_for('sector_screener') }}">
+        <div class="card-icon icon-purple"><i data-lucide="layers"></i></div>
+        <h3>Sector Screener</h3>
+        <p>Rank sectors by % return over a date range.</p>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+
+    <a class="menu-card" href="{{ url_for('index_screener') }}">
+        <div class="card-icon icon-green"><i data-lucide="bar-chart-3"></i></div>
+        <h3>Index Screener</h3>
+        <p>Rank indexes by % return over a date range.</p>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+
+    {% if current_user.can_upload %}
+    <a class="menu-card admin-card" href="{{ url_for('upload') }}">
+        <div class="card-icon icon-amber"><i data-lucide="upload-cloud"></i></div>
+        <h3>Upload Data</h3>
+        <p>Upload OHLC data and master files.</p>
+        {% if current_user.is_admin %}
+            <span class="badge"><i data-lucide="shield"></i> Admin</span>
+        {% else %}
+            <span class="badge badge-coadmin"><i data-lucide="shield"></i> Co-admin</span>
+        {% endif %}
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+    {% endif %}
+
+    {% if current_user.is_admin %}
+    <a class="menu-card admin-card" href="{{ url_for('data_management') }}">
+        <div class="card-icon icon-rose"><i data-lucide="database"></i></div>
+        <h3>Data Management</h3>
+        <p>Delete or download price data by date range.</p>
+        <span class="badge"><i data-lucide="shield"></i> Admin</span>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+
+    <a class="menu-card admin-card" href="{{ url_for('manage_users') }}">
+        <div class="card-icon icon-teal"><i data-lucide="users"></i></div>
+        <h3>Manage Users</h3>
+        <p>Create or remove user accounts.</p>
+        <span class="badge"><i data-lucide="shield"></i> Admin</span>
+        <span class="card-arrow"><i data-lucide="arrow-right"></i></span>
+    </a>
+    {% endif %}
+</div>
+
+<div class="overview-card">
+    <div class="overview-head">
+        <div>
+            <h3>Overview</h3>
+            <p>Key insights from your system</p>
+        </div>
+    </div>
+    <div class="overview-stats">
+        <div class="stat">
+            <div class="stat-icon icon-blue"><i data-lucide="trending-up"></i></div>
+            <div class="stat-body">
+                <div class="stat-num">{{ "{:,}".format(stats.total_stocks) }}</div>
+                <div class="stat-label">Total Stocks</div>
+            </div>
+        </div>
+        <div class="stat">
+            <div class="stat-icon icon-purple"><i data-lucide="pie-chart"></i></div>
+            <div class="stat-body">
+                <div class="stat-num">{{ "{:,}".format(stats.total_sectors) }}</div>
+                <div class="stat-label">Sectors</div>
+            </div>
+        </div>
+        <div class="stat">
+            <div class="stat-icon icon-green"><i data-lucide="bar-chart-3"></i></div>
+            <div class="stat-body">
+                <div class="stat-num">{{ "{:,}".format(stats.total_indexes) }}</div>
+                <div class="stat-label">Indexes</div>
+            </div>
+        </div>
+        <div class="stat">
+            <div class="stat-icon icon-amber"><i data-lucide="database"></i></div>
+            <div class="stat-body">
+                <div class="stat-num">{{ stats.data_size }}</div>
+                <div class="stat-label">Data Size</div>
+            </div>
+        </div>
+        <div class="stat">
+            <div class="stat-icon icon-rose"><i data-lucide="calendar"></i></div>
+            <div class="stat-body">
+                <div class="stat-num">
+                    {% if stats.last_updated %}{{ format_display(stats.last_updated) }}{% else %}—{% endif %}
+                </div>
+                <div class="stat-label">Last Updated</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
